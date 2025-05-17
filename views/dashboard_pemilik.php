@@ -345,6 +345,11 @@ $reviews = $stmt->get_result();
 <section id="sect-kosts" class="pemilik-section">
   <h2>Daftar Kost Anda</h2>
 
+  <!-- Tombol Tambah Kost -->
+  <button class="btn btn-success mb-3" data-bs-toggle="modal" data-bs-target="#addKostModal">
+    <i class="bi bi-plus-circle"></i> Tambah Kost
+  </button>
+
   <?php if (isset($_SESSION['msg'])): ?>
     <div class="alert <?= $_SESSION['msgClass'] ?>">
       <?= $_SESSION['msg']; unset($_SESSION['msg'], $_SESSION['msgClass']); ?>
@@ -469,6 +474,7 @@ $reviews = $stmt->get_result();
         <h5 class="modal-title" id="addKostLabel">Tambah Kost Baru</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Tutup"></button>
       </div>
+      
       <div class="modal-body">
         <div class="mb-3">
           <label class="form-label">Nama Kost</label>
