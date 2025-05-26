@@ -1,6 +1,6 @@
 <?php
 $host = 'localhost';
-$dbname = 'sewa_kost';
+$dbname = 'db_kost';
 $username = 'root';
 $password = '';
 

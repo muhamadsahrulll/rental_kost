@@ -35,7 +35,7 @@ $rev = $conn->prepare("
 $rev->bind_param("i", $kost_id);
 $rev->execute();
 $stats = $rev->get_result()->fetch_assoc();
-$avg_rating  = round($stats['avg_rating'],1);
+$avg_rating  = $stats['avg_rating'] !== null ? round($stats['avg_rating'], 1) : 0;
 $cnt_review  = $stats['cnt'];
 
 // 4. Ambil semua review detail
@@ -80,6 +80,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_review'])) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <link href="../assets/css/style.css" rel="stylesheet">
+  <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="<?= $_ENV['MIDTRANS_CLIENT_KEY'] ?>"></script>
 </head>
 <body>
 
@@ -262,9 +263,14 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_review'])) {
                 <p>Kamar Tersisa: <strong><?=htmlspecialchars($kost['kamar_tersisa'])?></strong></p>
                 <?php if(isset($_SESSION['user_id'])): ?>
                     <?php if(isset($_SESSION['role']) && $_SESSION['role'] === 'user'): ?>
-                        <a href="#" class="btn btn-success w-100 mt-3">
+                      <?php if ($kost['kamar_tersisa'] > 0): ?>
+                        <button id="btn-bayar" href="#" class="btn btn-success w-100 mt-3" data-kost-id="<?= $kost['id'] ?>">
                             Sewa Sekarang
-                        </a>
+                        </button>
+                        <pre><?= print_r($kost, true) ?></pre>
+                      <?php else: ?>
+                          <p style="color:red">Kos penuh</p>
+                      <?php endif; ?>
                     <?php elseif(isset($_SESSION['role']) && $_SESSION['role'] === 'pemilik'): ?>
                         <button class="btn btn-secondary w-100 mt-3" onclick="alert('Hanya user yang bisa sewa kost.')" disabled>
                             Sewa Sekarang
@@ -336,6 +342,53 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_review'])) {
       }
     });
   }
+
+    document.getElementById('btn-bayar').onclick = function() {
+      const kostId = this.dataset.kostId;
+
+      fetch('../views/transaction.php', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+        body: 'kost_id=' + kostId
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.token) {
+          snap.pay(data.token, {
+            onSuccess: function(result) {
+              simpanTransaksi(result);
+              alert('Pembayaran berhasil.');
+            },
+            onPending: function(result) {
+              simpanTransaksi(result);
+              alert('Menunggu pembayaran...');
+            },
+            onError: function(result) {
+              alert('Pembayaran gagal.');
+            }
+          });
+        } else {
+          alert('Gagal mendapatkan token: ' + data.error);
+        }
+      });
+
+      function simpanTransaksi(result) {
+        fetch('./../simpan_transaction.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(result)
+        })
+        .then(res => res.json())
+        .then(res => {
+          if (res.success) {
+            console.log('Transaksi berhasil disimpan.');
+            window.location.reload();
+          } else {
+            alert('Gagal menyimpan transaksi: ' + res.message);
+          }
+        });
+      }
+    };
 </script>
 </body>
 </html>

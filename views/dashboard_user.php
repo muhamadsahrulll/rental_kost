@@ -128,12 +128,12 @@ $user = $stmt->get_result()->fetch_assoc();
             <div class="mb-3">
               <label class="form-label">Email</label>
               <input type="email" name="email" class="form-control"
-                     value="<?= htmlspecialchars($user['email']) ?>">
+                     value="<?= htmlspecialchars($user['email']) ?>" disabled>
             </div>
             <div class="mb-3">
               <label class="form-label">Pekerjaan</label>
               <input type="text" name="pekerjaan" class="form-control"
-                     value="<?= htmlspecialchars($user['pekerjaan']) ?>">
+                     value="<?= htmlspecialchars($user['pekerjaan'] ?? '') ?>">
             </div>
             <div class="mb-3">
               <label class="form-label">Jenis Kelamin</label>
@@ -144,7 +144,7 @@ $user = $stmt->get_result()->fetch_assoc();
             </div>
             <div class="mb-3">
               <label class="form-label">Alamat</label>
-              <textarea name="alamat" class="form-control" rows="3"><?= htmlspecialchars($user['alamat']) ?></textarea>
+              <textarea name="alamat" class="form-control" rows="3"><?= htmlspecialchars($user['alamat'] ?? '') ?></textarea>
             </div>
             <button class="btn btn-primary">Simpan</button>
           </form>
