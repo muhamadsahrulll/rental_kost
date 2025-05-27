@@ -11,6 +11,8 @@ $user_id = $_SESSION['user_id'];
 $message = '';
 $alertClass = '';
 
+$trans = $conn->query("SELECT t.*, k.nama_kost FROM transactions t JOIN kost k ON t.kost_id = k.id WHERE t.user_id = $user_id ORDER BY t.created_at DESC");
+
 // Handle profile update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_profile'])) {
     $username     = $_POST['username'];
@@ -153,17 +155,47 @@ $user = $stmt->get_result()->fetch_assoc();
         <!-- Riwayat Transaksi -->
         <section id="riwayat" class="dashboard-section d-none">
           <h3>Riwayat Transaksi</h3>
-          <p>(Data dummy riwayat muncul di sini)</p>
+          <!-- <p>(Data dummy riwayat muncul di sini)</p>
           <ul class="list-group">
             <li class="list-group-item">Transaksi #123 — Rp1.200.000</li>
             <li class="list-group-item">Transaksi #124 — Rp800.000</li>
-          </ul>
+          </ul> -->
+          <table class="table">
+              <thead>
+                  <tr>
+                      <th>Kost</th>
+                      <th>Status</th>
+                      <th>Total</th>
+                      <th>Aksi</th>
+                  </tr>
+              </thead>
+              <tbody>
+                  <?php while ($row = $trans->fetch_assoc()): ?>
+                  <tr>
+                      <td><?= $row['nama_kost'] ?></td>
+                      <td><?= ucfirst($row['status']) ?></td>
+                      <td>Rp<?= number_format($row['amount']) ?></td>
+                      <td>
+                          <?php if ($row['status'] === 'pending'): ?>
+                              <button onclick="lunasi('<?= $row['order_id'] ?>')">Lunasi</button>
+                              <button onclick="refund('<?= $row['id'] ?>')">Refund/Cancel</button>
+                          <?php elseif ($row['status'] === 'settlement'): ?>
+                              Dibayar
+                          <?php elseif ($row['status'] === 'refund'): ?>
+                              Sudah direfund
+                          <?php endif; ?>
+                      </td>
+                  </tr>
+                  <?php endwhile; ?>
+              </tbody>
+          </table>
         </section>
       </div>
     </main>
   </div>
 </div>
 
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="<?= $_ENV['MIDTRANS_CLIENT_KEY'] ?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.querySelectorAll('.sidebar .nav-link').forEach(link => {
@@ -184,6 +216,42 @@ document.querySelectorAll('.sidebar .nav-link').forEach(link => {
     // Kalau tidak punya data-section (contoh: Logout), biarkan browser lanjutkan default action
   });
 });
+
+function lunasi(order_id) {
+  fetch(`../generate_token.php?order_id=${order_id}`)
+    .then(res => res.json())
+    .then(data => {
+      if (data.token) {
+        snap.pay(data.token, {
+          onSuccess: () => alert('Pembayaran berhasil'),
+          onPending: () => alert('Menunggu pembayaran'),
+          onError: () => alert('Gagal bayar')
+        });
+      } else {
+        alert('Gagal mendapatkan token: ' + data.error);
+      }
+    });
+}
+
+
+  function refund(id) {
+  if (!confirm('Yakin ingin refund?')) return;
+  console.log("Refund for id:", id);
+  fetch('../refund_transaction.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'transaction_id=' + id
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert(data.message);
+      window.location.reload();
+    } else {
+      alert('Error: ' + data.message);
+    }
+  });
+}
 
 </script>
 </body>
