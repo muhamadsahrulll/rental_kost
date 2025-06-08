@@ -11,7 +11,7 @@ if(empty($_ENV['MIDTRANS_SERVER_KEY'])) {
     die("MIDTRANS_SERVER_KEY belum di-set di .env");
 }
 
-\Midtrans\Config::$serverKey = $_ENV['MIDTRANS_SERVER_KEY'];
-\Midtrans\Config::$isProduction = filter_var($_ENV['MIDTRANS_IS_PRODUCTION'], FILTER_VALIDATE_BOOLEAN);
+\Midtrans\Config::$serverKey = "SB-Mid-server-ddxZGQZoHixMDraiMgHSWhhp";
+\Midtrans\Config::$isProduction = false;
 \Midtrans\Config::$isSanitized = true;
 \Midtrans\Config::$is3ds = true;

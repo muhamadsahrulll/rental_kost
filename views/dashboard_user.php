@@ -162,7 +162,7 @@ $user = $stmt->get_result()->fetch_assoc();
           </ul> -->
           <table class="table">
               <thead>
-                  <tr>
+                  <tr class="text-center">
                       <th>Kost</th>
                       <th>Status</th>
                       <th>Total</th>
@@ -173,18 +173,39 @@ $user = $stmt->get_result()->fetch_assoc();
                   <?php while ($row = $trans->fetch_assoc()): ?>
                   <tr>
                       <td><?= $row['nama_kost'] ?></td>
-                      <td><?= ucfirst($row['status']) ?></td>
+                      <td><?= htmlspecialchars($row['status']) ?></td>
                       <td>Rp<?= number_format($row['amount']) ?></td>
-                      <td>
-                          <?php if ($row['status'] === 'pending'): ?>
-                              <button onclick="lunasi('<?= $row['order_id'] ?>')">Lunasi</button>
-                              <button onclick="refund('<?= $row['id'] ?>')">Refund/Cancel</button>
-                          <?php elseif ($row['status'] === 'settlement'): ?>
-                              Dibayar
-                          <?php elseif ($row['status'] === 'refund'): ?>
-                              Sudah direfund
-                          <?php endif; ?>
-                      </td>
+                        <?php
+                        $refund_deadline = null;
+                        if (!empty($row['settlement_time'])) {
+                            $refund_deadline = strtotime($row['settlement_time']) + 2; // 2 detik
+                        }
+                        $now = time();
+                        ?>
+
+                        <td class="text-center">
+                            <?php if (strtolower($row['status']) === 'pending' && !empty($row['snap_token'])): ?>
+                                <button class="btn btn-primary btn-sm btn-sm px-2 py-0 rounded-3" onclick="lunasi('<?= $row['order_id'] ?>', <?= $row['kost_id'] ?>, '<?= $row['snap_token'] ?>')">Lunasi</button>
+                                |
+                                <button class="btn btn-danger btn-sm btn-sm px-2 py-0 rounded-3" onclick="cancel('<?= $row['id'] ?>')">Cancel</button>
+
+                            <?php elseif ($row['status'] === 'settlement'): ?>
+                                <?php if ($refund_deadline && $now < $refund_deadline): ?>
+                                    <button class="btn btn-success btn-sm btn-sm px-2 py-0 rounded-3" disabled>Dibayar</button>
+                                    |
+                                    <button class="btn btn-warning btn-sm btn-sm px-2 py-0 rounded-3" onclick="refund('<?= $row['id'] ?>')">Refund</button>
+                                <?php endif; ?>
+
+                            <?php elseif ($row['status'] === 'refund' || $row['status'] === 'refund_manual'): ?>
+                                <span class="btn btn-px-2 btn-sm px-2 py-0 rounded-3 disabled">Refunded</span>
+
+                            <?php elseif ($row['status'] === 'cancelled'): ?>
+                                <span class="btn btn-danger btn-sm px-2 py-0 rounded-3 disabled">Dibatalkan</span>
+
+                            <?php else: ?>
+                                <span class="btn btn-secondary btn-sm px-2 py-0 rounded-3 disabled"><?= ucfirst($row['status']) ?></span>
+                            <?php endif; ?>
+                        </td>
                   </tr>
                   <?php endwhile; ?>
               </tbody>
@@ -195,7 +216,7 @@ $user = $stmt->get_result()->fetch_assoc();
   </div>
 </div>
 
-<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="<?= $_ENV['MIDTRANS_CLIENT_KEY'] ?>"></script>
+<script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="SB-Mid-client-uESNPW0kWFz4AtZD"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 document.querySelectorAll('.sidebar .nav-link').forEach(link => {
@@ -217,41 +238,87 @@ document.querySelectorAll('.sidebar .nav-link').forEach(link => {
   });
 });
 
-function lunasi(order_id) {
-  fetch(`../generate_token.php?order_id=${order_id}`)
-    .then(res => res.json())
-    .then(data => {
-      if (data.token) {
-        snap.pay(data.token, {
-          onSuccess: () => alert('Pembayaran berhasil'),
-          onPending: () => alert('Menunggu pembayaran'),
-          onError: () => alert('Gagal bayar')
-        });
-      } else {
-        alert('Gagal mendapatkan token: ' + data.error);
-      }
+function lunasi(order_id, kost_id, snap_token) {
+    snap.pay(snap_token, {
+        onSuccess: function(result) {
+            // Simpan transaksi yang berhasil
+            fetch('../helpers/midtrans/save_transaction.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    kost_id: kost_id,
+                    order_id: order_id,
+                    amount: result.gross_amount,
+                    status: 'settlement',
+                    snap_token: snap_token,
+                    payment_type: result.payment_type
+                })
+            })
+            .then(res => res.json())
+            .then(res => {
+                alert(res.message);
+                window.location.reload(); // reload agar status dan tombol update
+            })
+            .catch(err => {
+                console.error(err);
+                alert('Gagal menyimpan transaksi!');
+            });
+        },
+        onPending: function(result) {
+            alert('Pembayaran masih pending.');
+            window.location.reload();
+        },
+        onError: function(result) {
+            alert('Pembayaran gagal: ' + JSON.stringify(result));
+        },
+        onClose: function() {
+            alert('Anda menutup popup pembayaran sebelum selesai.');
+        }
     });
 }
 
+// function refund(id) {
+//   if (!confirm('Yakin ingin refund?')) return;
+//   fetch('../helpers/midtrans/refund_transaction.php', {
+//     method: 'POST',
+//     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+//     body: 'transaction_id=' + id
+//   })
+//   .then(res => res.json())
+//   .then(data => {
+//     alert(data.success ? data.message : 'Error: ' + data.message);
+//     if (data.success) window.location.reload();
+//   });
+// }
 
-  function refund(id) {
-  if (!confirm('Yakin ingin refund?')) return;
-  console.log("Refund for id:", id);
-  fetch('../refund_transaction.php', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'transaction_id=' + id
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      alert(data.message);
-      window.location.reload();
-    } else {
-      alert('Error: ' + data.message);
+function cancel(transactionId) {
+    if (confirm('Yakin ingin membatalkan transaksi?')) {
+        fetch('../helpers/midtrans/cancel_transaction.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({transaction_id: transactionId})
+        })
+        .then(res => res.json())
+        .then(data => alert(data.message))
+        .then(() => location.reload())
+        .catch(() => alert('Terjadi kesalahan'));
     }
-  });
 }
+
+function refund(transactionId) {
+    if (confirm('Yakin ingin melakukan refund?')) {
+        fetch('../helpers/midtrans/refund_transaction.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({transaction_id: transactionId})
+        })
+        .then(res => res.json())
+        .then(data => alert(data.message))
+        // .then(() => location.reload())
+        .catch(() => alert('Terjadi kesalahan'));
+    }
+}
+
 
 </script>
 </body>

@@ -322,7 +322,7 @@ $reviews = $stmt->get_result();
       </section>
 
       <!-- 3. Permintaan Sewa -->
-      <section id="sect-requests" class="pemilik-section">
+      <!-- <section id="sect-requests" class="pemilik-section">
         <h2>Permintaan Sewa Baru</h2>
         <?php if (empty($requests)): ?>
           <p>Tidak ada permintaan sewa baru.</p>
@@ -332,14 +332,74 @@ $reviews = $stmt->get_result();
               <li class="list-group-item d-flex justify-content-between align-items-center">
                 <?= htmlspecialchars($req['nama_user']) ?> &mdash; <?= htmlspecialchars($req['nama_kost']) ?>
                 <span>
-                  <button class="btn btn-sm btn-success">Terima</button>
-                  <button class="btn btn-sm btn-danger">Tolak</button>
+                  <button class="btn btn-sm btn-success" onclick="handleRequest(<?= $req['id'] ?>, 'accept')">Terima</button>
+                  <button class="btn btn-sm btn-danger" onclick="handleRequest(<?= $req['id'] ?>, 'reject')">Tolak</button>
                 </span>
               </li>
             <?php endforeach; ?>
           </ul>
         <?php endif; ?>
+      </section> -->
+      <section class="pemilik-section">
+        <h2>Status Transaksi Penyewa</h2>
+
+        <h4 class="mt-4">Dibayar</h4>
+        <?php if ($dibayar->num_rows > 0): ?>
+          <ul class="list-group mb-4">
+            <?php while($row = $dibayar->fetch_assoc()): ?>
+              <li class="list-group-item d-flex justify-content-between">
+                <?= htmlspecialchars($row['nama_kost']) ?> - Rp<?= number_format($row['amount']) ?>
+                <span class="badge bg-success">Dibayar</span>
+              </li>
+            <?php endwhile; ?>
+          </ul>
+        <?php else: ?>
+          <p>Tidak ada transaksi dibayar.</p>
+        <?php endif; ?>
+
+        <h4 class="mt-4">Belum Dibayar</h4>
+        <?php if ($pending->num_rows > 0): ?>
+          <ul class="list-group mb-4">
+            <?php while($row = $pending->fetch_assoc()): ?>
+              <li class="list-group-item d-flex justify-content-between">
+                <?= htmlspecialchars($row['nama_kost']) ?> - Rp<?= number_format($row['amount']) ?>
+                <span class="badge bg-warning">Belum Dibayar</span>
+              </li>
+            <?php endwhile; ?>
+          </ul>
+        <?php else: ?>
+          <p>Tidak ada transaksi belum dibayar.</p>
+        <?php endif; ?>
+
+        <h4 class="mt-4">Ditolak (Refund)</h4>
+        <?php if ($refunds->num_rows > 0): ?>
+          <ul class="list-group mb-4">
+            <?php while($row = $refunds->fetch_assoc()): ?>
+              <li class="list-group-item d-flex justify-content-between">
+                <?= htmlspecialchars($row['nama_kost']) ?> - Rp<?= number_format($row['amount']) ?>
+                <span class="badge bg-danger">Refund</span>
+              </li>
+            <?php endwhile; ?>
+          </ul>
+        <?php else: ?>
+          <p>Tidak ada transaksi refund.</p>
+        <?php endif; ?>
+
+        <h4 class="mt-4">Dibatalkan</h4>
+        <?php if ($cancelled->num_rows > 0): ?>
+          <ul class="list-group">
+            <?php while($row = $cancelled->fetch_assoc()): ?>
+              <li class="list-group-item d-flex justify-content-between">
+                <?= htmlspecialchars($row['nama_kost']) ?> - Rp<?= number_format($row['amount']) ?>
+                <span class="badge bg-secondary">Dibatalkan</span>
+              </li>
+            <?php endwhile; ?>
+          </ul>
+        <?php else: ?>
+          <p>Tidak ada transaksi dibatalkan.</p>
+        <?php endif; ?>
       </section>
+
 
       <!-- 4. Daftar Kost -->
 <section id="sect-kosts" class="pemilik-section">
@@ -526,6 +586,26 @@ $reviews = $stmt->get_result();
       this.classList.add("active");
     });
   });
+
+
+  function handleRequest(transactionId, action) {
+    if (!confirm(`Yakin ingin ${action === 'accept' ? 'menerima' : 'menolak'} permintaan ini?`)) return;
+
+    fetch('../helpers/owner/handle_request.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: transactionId, action })
+    })
+    .then(res => res.json())
+    .then(res => {
+        alert(res.message);
+        window.location.reload();
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Terjadi kesalahan saat memproses permintaan.');
+    });
+}
 </script>
 
 </body>

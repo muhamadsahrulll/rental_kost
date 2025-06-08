@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_review'])) {
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
   <link href="../assets/css/style.css" rel="stylesheet">
-  <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="<?= $_ENV['MIDTRANS_CLIENT_KEY'] ?>"></script>
+  <script src="https://app.sandbox.midtrans.com/snap/snap.js" data-client-key="SB-Mid-client-uESNPW0kWFz4AtZD"></script>
 </head>
 <body>
 
@@ -264,7 +264,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_review'])) {
                 <?php if(isset($_SESSION['user_id'])): ?>
                     <?php if(isset($_SESSION['role']) && $_SESSION['role'] === 'user'): ?>
                       <?php if ($kost['kamar_tersisa'] > 0): ?>
-                        <button id="btn-bayar" href="#" class="btn btn-success w-100 mt-3" data-kost-id="<?= $kost['id'] ?>">
+                        <button id="btn-bayar" href="#" class="btn btn-success w-100 mt-3" data-kost-id="<?= $kost['id'] ?>" data-kost-stock="<?= $kost['kamar_tersisa'] ?>" >
                             Sewa Sekarang
                         </button>
                         <pre><?= print_r($kost, true) ?></pre>
@@ -343,52 +343,76 @@ if ($_SERVER['REQUEST_METHOD']==='POST' && isset($_POST['add_review'])) {
     });
   }
 
-    document.getElementById('btn-bayar').onclick = function() {
-      const kostId = this.dataset.kostId;
+document.getElementById('btn-bayar').addEventListener('click', function () {
+    const kostId = this.getAttribute('data-kost-id');
+    const stock = parseInt(this.getAttribute('data-kost-stock'));
 
-      fetch('../views/transaction.php', {
+    if (stock <= 0) return alert('Kamar sudah habis');
+
+    this.disabled = true;
+    this.textContent = 'Memproses...';
+
+    fetch('../helpers/midtrans/payment_handler.php', {
         method: 'POST',
-        headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-        body: 'kost_id=' + kostId
-      })
-      .then(res => res.json())
-      .then(data => {
-        if (data.token) {
-          snap.pay(data.token, {
-            onSuccess: function(result) {
-              simpanTransaksi(result);
-              alert('Pembayaran berhasil.');
-            },
-            onPending: function(result) {
-              simpanTransaksi(result);
-              alert('Menunggu pembayaran...');
-            },
-            onError: function(result) {
-              alert('Pembayaran gagal.');
-            }
-          });
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: `kost_id=${kostId}`
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'success') {
+            snap.pay(data.snap_token, {
+                onSuccess: function (result) {
+                    saveTransaction('success', result, data);
+                },
+                onPending: function (result) {
+                    saveTransaction('pending', result, data);
+                },
+                onError: function () {
+                    alert('Pembayaran gagal!');
+                    window.location.reload();
+                },
+                onClose: function () {
+                    alert('Anda menutup popup sebelum memilih metode.');
+                    window.location.reload();
+                }
+            });
         } else {
-          alert('Gagal mendapatkan token: ' + data.error);
+            alert('Gagal mendapatkan snap token: ' + data.message);
+            location.reload();
         }
-      });
+    })
+    .catch((e) => {
+        alert('Terjadi kesalahan: ' + e);
+        this.disabled = false;
+        this.textContent = 'Sewa Sekarang';
+    });
 
-      function simpanTransaksi(result) {
-        fetch('./../simpan_transaction.php', {
-          method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(result)
+    function saveTransaction(status, result, data) {
+        fetch('../helpers/midtrans/save_transaction.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                kost_id: kostId,
+                order_id: data.order_id,
+                amount: data.amount,
+                status: status,
+                snap_token: data.snap_token,
+                payment_type: result.payment_type
+            })
         })
         .then(res => res.json())
-        .then(res => {
-          if (res.success) {
-            console.log('Transaksi berhasil disimpan.');
+        .then(response => {
+            alert(response.message);
             window.location.reload();
-          } else {
-            alert('Gagal menyimpan transaksi: ' + res.message);
-          }
+        })
+        .catch(err => {
+            console.error(err);
+            alert("Gagal menyimpan transaksi!");
         });
-      }
-    };
+    }
+});
 </script>
 </body>
 </html>
